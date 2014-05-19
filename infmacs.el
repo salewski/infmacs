@@ -22,9 +22,9 @@
            :coding 'raw-text
            :filter-multibyte nil
            :sentinel (lambda (proc status)
-                       (infmacs-server-sentinel server proc status))
+                       (infmacs--server-sentinel server proc status))
            :filter (lambda (proc content)
-                     (infmacs-filter proc content #'infmacs-respond)))))
+                     (infmacs-filter proc content #'infmacs--respond)))))
     (prog1 (setf server (infmacs-server--create :proc proc))
       (process-put proc :struct server))))
 
@@ -33,20 +33,20 @@
   (mapc #'delete-process (infmacs-server-clients server))
   (delete-process (infmacs-server-proc server)))
 
-(defun infmacs-server-sentinel (server proc status)
+(defun infmacs--server-sentinel (server proc status)
   "Runs every time a client connects or changes state."
   (if (string-match-p "^open from" status)
-      (infmacs-register-client server proc)
-    (infmacs-unregister-client server proc)))
+      (infmacs--register-client server proc)
+    (infmacs--unregister-client server proc)))
 
-(defun infmacs-register-client (server proc)
+(defun infmacs--register-client (server proc)
   "Register PROC with INFMACS server."
   (push proc (infmacs-server-clients server))
   (setf (process-get proc :server) server
         (process-get proc :fill-buffer)
         (generate-new-buffer " *infmacs-filler*")))
 
-(defun infmacs-unregister-client (server proc)
+(defun infmacs--unregister-client (server proc)
   "Clean up after PROC and remove from SERVER's client list."
   (let ((buffer (process-get proc :fill-buffer)))
     (when buffer (kill-buffer buffer))
@@ -72,14 +72,14 @@ The handler is called with two arguments, PROC and the request object."
         (when request
           (funcall handler proc request))))))
 
-(defun infmacs-respond (proc request)
+(defun infmacs--respond (proc request)
   "Respond to PROC for REQUEST."
   (with-temp-buffer
     (set-buffer-multibyte nil)
-    (prin1 (infmacs-handle request) (current-buffer))
+    (prin1 (infmacs--handle request) (current-buffer))
     (process-send-region proc (point-min) (point-max))))
 
-(defun infmacs-handle (request)
+(defun infmacs--handle (request)
   "Process request and return the response value."
   (let ((expr (plist-get request :expr)))
     (condition-case e
@@ -87,6 +87,9 @@ The handler is called with two arguments, PROC and the request object."
       (error `(:error ,e)))))
 
 (cl-defun infmacs-batch-start (&optional (port (+ 1024 (mod (random) 64511))))
+  "For running an Infmacs server in batch mode, never returning.
+Invoking like so will start the server on a random port:
+    emacs -Q -batch -l infmacs.el -f infmacs-batch-start"
   (if (null noninteractive)
       (error "Only call `infmacs-start' in batch mode!")
     (let ((infmacs (infmacs-open port)))
