@@ -9,6 +9,11 @@
 ;; socket and the "inferior" Emacs would generally be run in batch
 ;; mode (`infmacs-batch-start').
 
+;; TODO:
+;; * Capture standard output
+;; * REPL
+;; * Guard against unreadable values
+
 ;;; Code:
 
 (require 'cl-lib)
@@ -108,6 +113,9 @@ Invoking like so will start the server on a random port:
 
 ;; Emacs as a CLIENT:
 
+(defvar infmacs-connection nil
+  "A single global connection for redirecting evaluation requests..")
+
 (cl-defstruct (infmacs-connection (:constructor infmacs-connection--create))
   "A connection to another Emacs process running an Infmacs server."
   proc buffer)
@@ -141,7 +149,41 @@ Invoking like so will start the server on a random port:
         (error (plist-get response :error)))
     (if error
         (funcall #'signal (car error) (cdr error))
-      (message "%s" value))))
+      (message "%S" value))))
+
+;; As a MINOR MODE:
+
+(defun infmacs (host port)
+  "Connect to a running Infmacs server."
+  (interactive "sHost: \nnPort: ")
+  (setf infmacs-connection (infmacs-connect host port))
+  (message "Connected to %s:%d." host port))
+
+(defvar infmacs-minor-mode-map
+  (let ((map (make-sparse-keymap)))
+    (prog1 map
+      (define-key map (kbd "C-x C-e") #'infmacs-eval-last-sexp)
+      (define-key map (kbd "C-M-x") #'infmacs-eval-defun)
+      (define-key map (kbd "C-c C-k") #'infmacs-eval-buffer)))
+  "Keymap for `infmacs-minor-mode'.")
+
+(define-minor-mode infmacs-minor-mode
+  "Mode that redirects in-buffer evaluation to an \"inferior\" Emacs."
+  :lighter " Infmacs"
+  :keymap infmacs-minor-mode-map)
+
+(defun infmacs-eval-last-sexp (&optional prefix)
+  "Like `eval-last-sexp' but do so in the \"inferior\" Emacs."
+  (interactive "P")
+  (infmacs-eval infmacs-connection (preceding-sexp)))
+
+(defun infmacs-eval-defun ()
+  "Like `eval-defun' but do so in the \"inferior\" Emacs."
+  (interactive)
+  (let ((expr (save-excursion
+                (beginning-of-defun)
+                (setq form (read (current-buffer))))))
+    (infmacs-eval infmacs-connection form)))
 
 (provide 'infmacs)
 
