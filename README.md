@@ -10,7 +10,7 @@ This is a work in progress.
 
 1. Start an Infmacs server in batch mode.
 
-    emacs -Q -batch -l infmacs.el --eval '(infmacs-batch-start 3333)'
+        emacs -Q -batch -l infmacs.el --eval '(infmacs-batch-start 3333)'
 
 2. Connect to it from your normal Emacs with `M-x infmacs`.
    Connections are *only* accepted from localhost.
