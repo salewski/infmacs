@@ -1,5 +1,14 @@
 ;; infmacs.el --- inferior/remote Emacs interaction -*- lexical-binding: t; -*-
 
+;; This is free and unencumbered software released into the public domain.
+
+;;; Commentary:
+
+;; Infmacs provides remote interaction with an Emacs instance from an
+;; Emacs, much like SLIME+Swank. Communication is performed over a TCP
+;; socket and the "inferior" Emacs would generally be run in batch
+;; mode (`infmacs-batch-start').
+
 ;;; Code:
 
 (require 'cl-lib)
@@ -92,7 +101,7 @@ Invoking like so will start the server on a random port:
     emacs -Q -batch -l infmacs.el -f infmacs-batch-start"
   (if (null noninteractive)
       (error "Only call `infmacs-start' in batch mode!")
-    (let ((infmacs (infmacs-open port)))
+    (let ((_server (infmacs-open port)))
       (princ (format "Server opened on port %d\n" port))
       (while t
         (sleep-for 60)))))
@@ -126,9 +135,8 @@ Invoking like so will start the server on a random port:
     (process-send-region (infmacs-connection-proc infmacs)
                          (point-min) (point-max))))
 
-(defun infmacs-result (proc response)
+(defun infmacs-result (_proc response)
   "Handle REPONSE from the server connected to PROC."
-  (setf foo response)
   (let ((value (plist-get response :value))
         (error (plist-get response :error)))
     (if error
