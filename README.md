@@ -1,4 +1,5 @@
-# Infmacs, Inferior Emacs interaction environment
+# Infmacs
+## Inferior Emacs interaction environment
 
 Connect to a remote Emacs instance as you would a remote Common Lisp
 instance running Swank with SLIME. Expressions can be evaluated in the
