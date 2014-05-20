@@ -10,7 +10,7 @@
 ;; mode (`infmacs-batch-start').
 
 ;; TODO:
-;; * REPL (override IELM?)
+;; * standard-input?
 
 ;;; Code:
 
@@ -211,7 +211,7 @@ Invoking like so will start the server on a random port:
           (output (message "%s%s" output value))
           ((message "%s" value)))))
 
-;; Misc
+;; Misc:
 
 (defun infmacs--try-int (string)
   "Return the integer expressed in STRING if it looks like an integer."
@@ -223,7 +223,7 @@ Invoking like so will start the server on a random port:
   (base64-encode-string
    (apply #'string (cl-loop repeat 9 collect (random 256)))))
 
-;; As a MINOR MODE:
+;; Minor mode:
 
 (defvar infmacs-default-host "localhost"
   "Default host when prompting the user.")
@@ -252,7 +252,8 @@ Invoking like so will start the server on a random port:
     (prog1 map
       (define-key map (kbd "C-x C-e") #'infmacs-eval-last-sexp)
       (define-key map (kbd "C-M-x") #'infmacs-eval-defun)
-      (define-key map (kbd "C-c C-k") #'infmacs-eval-buffer)))
+      (define-key map (kbd "C-c C-k") #'infmacs-eval-buffer)
+      (define-key map (kbd "C-c C-z") #'infmacs-repl)))
   "Keymap for `infmacs-minor-mode'.")
 
 (define-minor-mode infmacs-minor-mode
@@ -275,6 +276,83 @@ Invoking like so will start the server on a random port:
                 (beginning-of-defun)
                 (read (current-buffer)))))
     (infmacs-eval t expr)))
+
+;; REPL:
+
+(defvar infmacs-prompt "> "
+  "Prompt to display for new input.")
+
+(defun infmacs-repl ()
+  "Start or pop to the Infmacs REPL."
+  (interactive)
+  (pop-to-buffer (get-buffer-create "*infmacs-repl*"))
+  (infmacs-repl-mode))
+
+(defvar-local infmacs-repl-history nil
+  "Buffer-local history for the Infmacs REPL.")
+
+(defvar infmacs-repl-mode-map
+  (let ((map (make-sparse-keymap)))
+    (prog1 map
+      (define-key map (kbd "<return>") #'infmacs-repl-eval)
+      (define-key map (kbd "C-c C-z") #'quit-window)))
+  "Keymap for Infmacs REPL.")
+
+(define-derived-mode infmacs-repl-mode emacs-lisp-mode "Infmacs REPL"
+  "REPL connected to an Infmacs process."
+  (when (zerop (buffer-size))
+    (infmacs-repl-prompt)))
+
+(defface infmacs-repl-prompt
+  '((t :inherit comint-highlight-prompt))
+  "Face for the Infmacs REPL prompt.")
+
+(defface infmacs-repl-value
+  '((((class color) (background light))
+     :foreground "#77F")
+    (((class color) (background dark))
+     :foreground "#77F"))
+  "Face for Infmacs REPL return values.")
+
+(defface infmacs-repl-error
+  '((t :inherit error))
+  "Face for Infmacs REPL errors.")
+
+(defun infmacs-repl-prompt ()
+  "Insert a fresh, read-only prompt at the REPL."
+  (insert (propertize infmacs-prompt
+                      'read-only t
+                      'rear-nonsticky t
+                      'font-lock-face 'infmacs-repl-prompt)))
+
+(defun infmacs-repl-find-sexp ()
+  "Find the s-expression at the prompt."
+  (save-excursion
+    (setf (point) (point-max))
+    (cl-loop until (get-text-property (point) 'read-only)
+             do (backward-char))
+    (read (current-buffer))))
+
+(defun infmacs-repl-eval ()
+  "Evaluate the current expression at the prompt."
+  (interactive)
+  (setf (point) (point-max))
+  (infmacs-eval
+   t (infmacs-repl-find-sexp)
+   (lambda (response)
+     (insert "\n")
+     (let ((value (plist-get response :value))
+           (output (plist-get response :stdout))
+           (error (plist-get response :error)))
+       (if error
+           (insert (propertize (format "%S" error)
+                               'font-lock-face 'infmacs-repl-error))
+         (when output
+           (insert output))
+         (push value infmacs-repl-history)
+         (insert (propertize value 'font-lock-face 'infmacs-repl-value)))
+       (insert "\n")
+       (infmacs-repl-prompt)))))
 
 (provide 'infmacs)
 
