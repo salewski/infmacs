@@ -12,7 +12,6 @@
 ;; TODO:
 ;; * Capture standard output
 ;; * REPL
-;; * Guard against unreadable values
 
 ;;; Code:
 
@@ -159,6 +158,9 @@ Invoking like so will start the server on a random port:
   (with-temp-buffer
     (set-buffer-multibyte nil)
     (prin1 `(:expr ,expr) (current-buffer))
+    (setf (point) (point-min))
+    (unless (ignore-errors (read (current-buffer)))
+      (error "Cannot evaluate unreadable value."))
     (process-send-region (infmacs-connection-proc infmacs)
                          (point-min) (point-max))))
 
