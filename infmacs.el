@@ -295,6 +295,7 @@ Invoking like so will start the server on a random port:
   (let ((map (make-sparse-keymap)))
     (prog1 map
       (define-key map (kbd "<return>") #'infmacs-repl-eval)
+      (define-key map (kbd "C-a") #'infmacs-repl-bol)
       (define-key map (kbd "C-c C-z") #'quit-window)))
   "Keymap for Infmacs REPL.")
 
@@ -332,6 +333,15 @@ Invoking like so will start the server on a random port:
     (cl-loop until (get-text-property (point) 'read-only)
              do (backward-char))
     (read (current-buffer))))
+
+(defun infmacs-repl-bol ()
+  "Move the point to just after the prompt."
+  (interactive)
+  (cl-loop until (or (get-text-property (point) 'read-only)
+                     (zerop (current-column)))
+           do (backward-char))
+  (when (get-text-property (point) 'read-only)
+    (forward-char 1)))
 
 (defun infmacs-repl-eval ()
   "Evaluate the current expression at the prompt."
