@@ -122,7 +122,7 @@ Invoking like so will start the server on a random port:
 
 ;; Emacs as a CLIENT:
 
-(defvar infmacs-connection nil
+(defvar infmacs-default-connection nil
   "A single global connection for redirecting evaluation requests..")
 
 (defclass infmacs-connection ()
@@ -179,17 +179,26 @@ Invoking like so will start the server on a random port:
 
 ;; As a MINOR MODE:
 
+(defvar infmacs-default-host "localhost"
+  "Default host when prompting the user.")
+
+(defvar infmacs-default-port nil
+  "Default port when prompting the user for input.")
+
 (defun infmacs-read-host-port ()
   "Ask the user for a host and port."
-  (let* ((host (read-string "Host (localhost): " nil nil "localhost"))
+  (let* ((host (read-string (format "Host (%s): " infmacs-default-host)
+                            nil nil infmacs-default-host))
          (clipboard (x-get-selection))
-         (port (read-number "Port: " (infmacs--try-int clipboard))))
+         (port (read-number "Port: " (or infmacs-default-port
+                                         (infmacs--try-int clipboard)))))
     (list host port)))
 
 (defun infmacs (host port)
   "Connect to a running Infmacs server."
   (interactive (infmacs-read-host-port))
-  (setf infmacs-connection (infmacs-connect host port))
+  (when infmacs-default-connection (infmacs-close infmacs-default-connection))
+  (setf infmacs-default-connection (infmacs-connect host port))
   (message "Connected to %s:%d." host port))
 
 (defvar infmacs-minor-mode-map
@@ -208,7 +217,7 @@ Invoking like so will start the server on a random port:
 (defun infmacs-eval-last-sexp (&optional prefix)
   "Like `eval-last-sexp' but do so in the \"inferior\" Emacs."
   (interactive "P")
-  (infmacs-eval infmacs-connection (preceding-sexp)))
+  (infmacs-eval infmacs-default-connection (preceding-sexp)))
 
 (defun infmacs-eval-defun ()
   "Like `eval-defun' but do so in the \"inferior\" Emacs."
@@ -216,7 +225,7 @@ Invoking like so will start the server on a random port:
   (let ((expr (save-excursion
                 (beginning-of-defun)
                 (setq form (read (current-buffer))))))
-    (infmacs-eval infmacs-connection form)))
+    (infmacs-eval infmacs-default-connection form)))
 
 (provide 'infmacs)
 
