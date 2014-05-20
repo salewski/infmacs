@@ -10,7 +10,7 @@
 ;; mode (`infmacs-batch-start').
 
 ;; TODO:
-;; * REPL
+;; * REPL (override IELM?)
 
 ;;; Code:
 
@@ -78,20 +78,21 @@
   "Try to read a request from the client and give it to HANDLER.
 The handler is called with two arguments, PROC and the request object."
   (let ((buffer (process-get proc :fill-buffer)))
-    (with-current-buffer buffer
-      (set-buffer-multibyte nil)
-      (setf (point) (point-max))
-      (insert content)
-      (set-buffer-multibyte t)
-      (setf (point) (point-min))
-      ;; Attempt to parse the buffer.
-      (let ((request (condition-case nil
-                         (prog1 (read (current-buffer))
-                           (delete-region (point-min) (point)))
-                       (end-of-file nil)
-                       (invalid-read-syntax nil))))
-        (when request
-          (funcall handler proc request))))))
+    (let ((request
+           (with-current-buffer buffer
+             (set-buffer-multibyte nil)
+             (setf (point) (point-max))
+             (insert content)
+             (set-buffer-multibyte t)
+             (setf (point) (point-min))
+             ;; Attempt to parse the buffer.
+             (condition-case nil
+                 (prog1 (read (current-buffer))
+                   (delete-region (point-min) (point)))
+               (end-of-file nil)
+               (invalid-read-syntax nil)))))
+      (when request
+        (funcall handler proc request)))))
 
 (defun infmacs--respond (proc request)
   "Respond to PROC for REQUEST."
@@ -104,13 +105,14 @@ The handler is called with two arguments, PROC and the request object."
   "Process request and return the response value."
   (with-temp-buffer
     (let ((standard-output (current-buffer))
-          (expr (plist-get request :expr)))
+          (expr (plist-get request :expr))
+          (id (plist-get request :id)))
       (condition-case e
-          (let ((output (list :value (prin1-to-string (eval expr t)))))
+          (let ((output (list :id id :value (prin1-to-string (eval expr t)))))
             (when (> (buffer-size) 0)
               (setf output (nconc output (list :stdout (buffer-string)))))
             output)
-        (error `(:error ,e))))))
+        (error `(:id ,id :error ,e))))))
 
 (cl-defun infmacs-batch-start (&optional (port (+ 1024 (mod (random) 64511))))
   "For running an Infmacs server in batch mode, never returning.
@@ -128,6 +130,9 @@ Invoking like so will start the server on a random port:
 (defvar infmacs-default-connection nil
   "A single global connection for redirecting evaluation requests..")
 
+(defvar infmacs--callbacks (make-hash-table :test 'equal)
+  "Mapping IDs to callbacks.")
+
 (defclass infmacs-connection ()
   ((proc :initarg :proc
          :reader infmacs-connection-proc)
@@ -143,7 +148,8 @@ Invoking like so will start the server on a random port:
                :host host
                :family 'ipv4
                :filter (lambda (proc content)
-                         (infmacs-filter proc content #'infmacs-result))))
+                         (infmacs-filter proc content
+                                         #'infmacs-handle-result))))
         (client (make-instance 'infmacs-connection :proc proc)))
     (prog1 client
       (process-put proc :client client)
@@ -157,19 +163,48 @@ Invoking like so will start the server on a random port:
   "Return non-nil if INFMACS. is still alive."
   (process-live-p (infmacs-connection-proc infmacs)))
 
-(defun infmacs-eval (infmacs expr)
+(defun infmacs-eval (infmacs expr &optional callback)
   "Evaluate EXPR in INFMACS server."
+  (when (eq t infmacs)
+    (setf infmacs infmacs-default-connection))
   (with-temp-buffer
-    (set-buffer-multibyte nil)
-    (prin1 `(:expr ,expr) (current-buffer))
-    (setf (point) (point-min))
-    (unless (ignore-errors (read (current-buffer)))
-      (error "Cannot evaluate unreadable value."))
-    (process-send-region (infmacs-connection-proc infmacs)
-                         (point-min) (point-max))))
+    (let ((id (infmacs-gen-id)))
+      (set-buffer-multibyte nil)
+      (prin1 `(:id ,id :expr ,expr) (current-buffer))
+      (setf (point) (point-min))
+      (unless (ignore-errors (read (current-buffer)))
+        (error "Cannot evaluate unreadable value."))
+      (setf (gethash id infmacs--callbacks)
+            (or callback #'infmacs-result-minibuffer))
+      (process-send-region (infmacs-connection-proc infmacs)
+                           (point-min) (point-max)))))
 
-(defun infmacs-result (_proc response)
-  "Handle REPONSE from the server connected to PROC."
+(defun infmacs-eval-synchronously (infmacs expr)
+  "Evaluate EXPR in INFMACS server."
+  (let ((response nil))
+    (infmacs-eval infmacs expr (lambda (r) (setf response r)))
+    (while (null response)
+      (sit-for 0.01))
+    (let ((value (plist-get response :value))
+          (output (plist-get response :stdout))
+          (error (plist-get response :error)))
+      (setf foo error)
+      (if error
+          (funcall #'signal (car error) (cdr error))
+        (when output
+          (princ output))
+        (read value)))))
+
+(defun infmacs-handle-result (_proc response)
+  "Handle REPONSE from the server connected to _PROC."
+  (let* ((id (plist-get response :id))
+         (cb (gethash id infmacs--callbacks)))
+    (unless (null cb)
+      (remhash id infmacs--callbacks)
+      (funcall cb response))))
+
+(defun infmacs-result-minibuffer (response)
+  "Display RESPONSE in the minibuffer."
   (let ((value (plist-get response :value))
         (output (plist-get response :stdout))
         (error (plist-get response :error)))
@@ -183,6 +218,11 @@ Invoking like so will start the server on a random port:
   "Return the integer expressed in STRING if it looks like an integer."
   (when (string-match-p "^ *[0-9]+ *$" string)
     (read string)))
+
+(defun infmacs-gen-id ()
+  "Generate a fresh random ID."
+  (base64-encode-string
+   (apply #'string (cl-loop repeat 9 collect (random 256)))))
 
 ;; As a MINOR MODE:
 
