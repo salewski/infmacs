@@ -188,7 +188,6 @@ Invoking like so will start the server on a random port:
     (let ((value (plist-get response :value))
           (output (plist-get response :stdout))
           (error (plist-get response :error)))
-      (setf foo error)
       (if error
           (funcall #'signal (car error) (cdr error))
         (when output
