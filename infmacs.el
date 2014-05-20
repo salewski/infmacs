@@ -264,15 +264,18 @@ Invoking like so will start the server on a random port:
 (defun infmacs-eval-last-sexp (&optional prefix)
   "Like `eval-last-sexp' but do so in the \"inferior\" Emacs."
   (interactive "P")
-  (infmacs-eval infmacs-default-connection (preceding-sexp)))
+  (let ((sexp (preceding-sexp)))
+    (if prefix
+        (prin1 (infmacs-eval-synchronously t sexp) (current-buffer))
+      (infmacs-eval t sexp))))
 
 (defun infmacs-eval-defun ()
   "Like `eval-defun' but do so in the \"inferior\" Emacs."
   (interactive)
   (let ((expr (save-excursion
                 (beginning-of-defun)
-                (setq form (read (current-buffer))))))
-    (infmacs-eval infmacs-default-connection form)))
+                (read (current-buffer)))))
+    (infmacs-eval t expr)))
 
 (provide 'infmacs)
 
