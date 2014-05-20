@@ -52,7 +52,7 @@
   (mapc #'delete-process (infmacs-server-clients server))
   (delete-process (infmacs-server-proc server)))
 
-(defmethod infmacs-alive-p ((server infmacs-server))
+(defmethod infmacs-live-p ((server infmacs-server))
   "Return non-nil if SERVER is still alive."
   (process-live-p (infmacs-server-proc server)))
 
@@ -150,7 +150,7 @@ Invoking like so will start the server on a random port:
   "Close the connection to INFMACS."
   (delete-process (infmacs-connection-proc infmacs)))
 
-(defmethod infmacs-alive-p ((infmacs infmacs-connection))
+(defmethod infmacs-live-p ((infmacs infmacs-connection))
   "Return non-nil if INFMACS. is still alive."
   (process-live-p (infmacs-connection-proc infmacs)))
 
