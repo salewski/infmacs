@@ -10,7 +10,6 @@
 ;; mode (`infmacs-batch-start').
 
 ;; TODO:
-;; * Capture standard output
 ;; * REPL
 
 ;;; Code:
@@ -103,10 +102,15 @@ The handler is called with two arguments, PROC and the request object."
 
 (defun infmacs--handle (request)
   "Process request and return the response value."
-  (let ((expr (plist-get request :expr)))
-    (condition-case e
-        `(:value ,(prin1-to-string (eval expr t)))
-      (error `(:error ,e)))))
+  (with-temp-buffer
+    (let ((standard-output (current-buffer))
+          (expr (plist-get request :expr)))
+      (condition-case e
+          (let ((output (list :value (prin1-to-string (eval expr t)))))
+            (when (> (buffer-size) 0)
+              (setf output (nconc output (list :stdout (buffer-string)))))
+            output)
+        (error `(:error ,e))))))
 
 (cl-defun infmacs-batch-start (&optional (port (+ 1024 (mod (random) 64511))))
   "For running an Infmacs server in batch mode, never returning.
@@ -167,10 +171,11 @@ Invoking like so will start the server on a random port:
 (defun infmacs-result (_proc response)
   "Handle REPONSE from the server connected to PROC."
   (let ((value (plist-get response :value))
+        (output (plist-get response :stdout))
         (error (plist-get response :error)))
-    (if error
-        (funcall #'signal (car error) (cdr error))
-      (message "%s" value))))
+    (cond (error (funcall #'signal (car error) (cdr error)))
+          (output (message "%s%s" output value))
+          ((message "%s" value)))))
 
 ;; Misc
 
