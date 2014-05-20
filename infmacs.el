@@ -17,12 +17,16 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'eieio)
 
 ;; Emacs as a SERVER:
 
-(cl-defstruct (infmacs-server (:constructor infmacs-server--create))
-  "An instance of an Infmacs server currently handling requests."
-  proc clients)
+(defclass infmacs-server ()
+  ((proc :initarg :proc
+         :reader infmacs-server-proc)
+   (clients :initform ()
+            :accessor infmacs-server-clients))
+  (:documentation "An instance of an Infmacs server."))
 
 (defun infmacs-open (port)
   "Start up a new server on PORT, returning a server object."
@@ -33,34 +37,39 @@
            :service port
            :server t
            :host "localhost"
+           :family 'ipv4
            :coding 'raw-text
            :filter-multibyte nil
            :sentinel (lambda (proc status)
                        (infmacs--server-sentinel server proc status))
            :filter (lambda (proc content)
                      (infmacs-filter proc content #'infmacs--respond)))))
-    (prog1 (setf server (infmacs-server--create :proc proc))
-      (process-put proc :struct server))))
+    (prog1 (setf server (make-instance 'infmacs-server :proc proc))
+      (process-put proc :server server))))
 
-(defun infmacs-close (server)
+(defmethod infmacs-close ((server infmacs-server))
   "Close an Infmacs SERVER along with all clients."
   (mapc #'delete-process (infmacs-server-clients server))
   (delete-process (infmacs-server-proc server)))
 
+(defmethod infmacs-alive-p ((server infmacs-server))
+  "Return non-nil if SERVER is still alive."
+  (process-live-p (infmacs-server-proc server)))
+
 (defun infmacs--server-sentinel (server proc status)
   "Runs every time a client connects or changes state."
   (if (string-match-p "^open from" status)
-      (infmacs--register-client server proc)
-    (infmacs--unregister-client server proc)))
+      (infmacs-register-client server proc)
+    (infmacs-unregister-client server proc)))
 
-(defun infmacs--register-client (server proc)
+(defmethod infmacs-register-client ((server infmacs-server) proc)
   "Register PROC with INFMACS server."
   (push proc (infmacs-server-clients server))
   (setf (process-get proc :server) server
         (process-get proc :fill-buffer)
         (generate-new-buffer " *infmacs-filler*")))
 
-(defun infmacs--unregister-client (server proc)
+(defmethod infmacs-unregister-client ((server infmacs-server) proc)
   "Clean up after PROC and remove from SERVER's client list."
   (let ((buffer (process-get proc :fill-buffer)))
     (when buffer (kill-buffer buffer))
@@ -97,7 +106,7 @@ The handler is called with two arguments, PROC and the request object."
   "Process request and return the response value."
   (let ((expr (plist-get request :expr)))
     (condition-case e
-        `(:value ,(eval expr t))
+        `(:value ,(prin1-to-string (eval expr t)))
       (error `(:error ,e)))))
 
 (cl-defun infmacs-batch-start (&optional (port (+ 1024 (mod (random) 64511))))
@@ -116,9 +125,12 @@ Invoking like so will start the server on a random port:
 (defvar infmacs-connection nil
   "A single global connection for redirecting evaluation requests..")
 
-(cl-defstruct (infmacs-connection (:constructor infmacs-connection--create))
-  "A connection to another Emacs process running an Infmacs server."
-  proc buffer)
+(defclass infmacs-connection ()
+  ((proc :initarg :proc
+         :reader infmacs-connection-proc)
+   (buffer :initform (generate-new-buffer " *infmacs-filler*")
+           :reader infmacs-connection-buffer))
+  (:documentation "A connection to another Emacs process running an Infmacs."))
 
 (defun infmacs-connect (host port)
   "Connect to Infmacs server at HOST and PORT, returning a connection object."
@@ -129,11 +141,18 @@ Invoking like so will start the server on a random port:
                :family 'ipv4
                :filter (lambda (proc content)
                          (infmacs-filter proc content #'infmacs-result))))
-        (buffer (generate-new-buffer " *infmacs-filler*"))
-        (client (infmacs-connection--create :proc proc :buffer buffer)))
+        (client (make-instance 'infmacs-connection :proc proc)))
     (prog1 client
-      (process-put proc :struct client)
-      (process-put proc :fill-buffer buffer))))
+      (process-put proc :client client)
+      (process-put proc :fill-buffer (infmacs-connection-buffer client)))))
+
+(defmethod infmacs-close ((infmacs infmacs-connection))
+  "Close the connection to INFMACS."
+  (delete-process (infmacs-connection-proc infmacs)))
+
+(defmethod infmacs-alive-p ((infmacs infmacs-connection))
+  "Return non-nil if INFMACS. is still alive."
+  (process-live-p (infmacs-connection-proc infmacs)))
 
 (defun infmacs-eval (infmacs expr)
   "Evaluate EXPR in INFMACS server."
@@ -149,13 +168,27 @@ Invoking like so will start the server on a random port:
         (error (plist-get response :error)))
     (if error
         (funcall #'signal (car error) (cdr error))
-      (message "%S" value))))
+      (message "%s" value))))
+
+;; Misc
+
+(defun infmacs--try-int (string)
+  "Return the integer expressed in STRING if it looks like an integer."
+  (when (string-match-p "^ *[0-9]+ *$" string)
+    (read string)))
 
 ;; As a MINOR MODE:
 
+(defun infmacs-read-host-port ()
+  "Ask the user for a host and port."
+  (let* ((host (read-string "Host (localhost): " nil nil "localhost"))
+         (clipboard (x-get-selection))
+         (port (read-number "Port: " (infmacs--try-int clipboard))))
+    (list host port)))
+
 (defun infmacs (host port)
   "Connect to a running Infmacs server."
-  (interactive "sHost: \nnPort: ")
+  (interactive (infmacs-read-host-port))
   (setf infmacs-connection (infmacs-connect host port))
   (message "Connected to %s:%d." host port))
 
