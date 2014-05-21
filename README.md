@@ -13,7 +13,7 @@ programmed much like a Common Lisp image with Swank.
 
 1. Start an Infmacs server in batch mode.
 
-        emacs -Q -batch -l infmacs.el --eval '(infmacs-batch-start 3333)'
+        emacs -Q -batch -l infmacs.el -f infmacs-batch-start 3333
 
 2. Connect to it from your normal Emacs with `M-x infmacs`, providing
    a host and port (3333 in this case). For security reasons,

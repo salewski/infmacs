@@ -121,8 +121,10 @@ Invoking like so will start the server on a random port:
     emacs -Q -batch -l infmacs.el -f infmacs-batch-start"
   (if (null noninteractive)
       (error "Only call `infmacs-start' in batch mode!")
-    (let ((_server (infmacs-open port)))
-      (princ (format "Server opened on port %d\n" port))
+    (let* ((cmdline-port (infmacs--try-int (car command-line-args-left)))
+           (real-port (or cmdline-port port))
+           (_server (infmacs-open real-port)))
+      (princ (format "Server opened on port %d\n" real-port))
       (while t
         (sleep-for 60)))))
 
