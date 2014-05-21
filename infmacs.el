@@ -40,8 +40,8 @@
            :server t
            :host "localhost"
            :family 'ipv4
-           :coding 'raw-text
-           :filter-multibyte nil
+           :coding 'utf-8
+           :filter-multibyte t
            :sentinel (lambda (proc status)
                        (infmacs--server-sentinel server proc status))
            :filter (lambda (proc content)
@@ -84,10 +84,8 @@ The handler is called with two arguments, PROC and the request object."
   (let ((buffer (process-get proc :fill-buffer)))
     (let ((request
            (with-current-buffer buffer
-             (set-buffer-multibyte nil)
              (setf (point) (point-max))
              (insert content)
-             (set-buffer-multibyte t)
              (setf (point) (point-min))
              ;; Attempt to parse the buffer.
              (condition-case nil
@@ -101,7 +99,6 @@ The handler is called with two arguments, PROC and the request object."
 (defun infmacs--respond (proc request)
   "Respond to PROC for REQUEST."
   (with-temp-buffer
-    (set-buffer-multibyte nil)
     (prin1 (infmacs--handle request) (current-buffer))
     (process-send-region proc (point-min) (point-max))))
 
@@ -151,6 +148,8 @@ Invoking like so will start the server on a random port:
                :service port
                :host host
                :family 'ipv4
+               :coding 'utf-8
+               :filter-multibyte t
                :filter (lambda (proc content)
                          (infmacs-filter proc content
                                          #'infmacs-handle-result))))
@@ -173,7 +172,6 @@ Invoking like so will start the server on a random port:
     (setf infmacs infmacs-default-connection))
   (with-temp-buffer
     (let ((id (infmacs-gen-id)))
-      (set-buffer-multibyte nil)
       (prin1 `(:id ,id :expr ,expr) (current-buffer))
       (setf (point) (point-min))
       (unless (ignore-errors (read (current-buffer)))
