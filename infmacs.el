@@ -19,6 +19,10 @@
 
 ;; Emacs as a SERVER:
 
+(defgroup infmacs ()
+  "Inferior/remote Emacs interaction."
+  :group 'comm)
+
 (defclass infmacs-server ()
   ((proc :initarg :proc
          :reader infmacs-server-proc)
@@ -306,18 +310,21 @@ Invoking like so will start the server on a random port:
 
 (defface infmacs-repl-prompt
   '((t :inherit comint-highlight-prompt))
-  "Face for the Infmacs REPL prompt.")
+  "Face for the Infmacs REPL prompt."
+  :group 'infmacs)
 
 (defface infmacs-repl-value
   '((((class color) (background light))
      :foreground "#77F")
     (((class color) (background dark))
      :foreground "#77F"))
-  "Face for Infmacs REPL return values.")
+  "Face for Infmacs REPL return values."
+  :group 'infmacs)
 
 (defface infmacs-repl-error
   '((t :inherit error))
-  "Face for Infmacs REPL errors.")
+  "Face for Infmacs REPL errors."
+  :group 'infmacs)
 
 (defun infmacs-repl-prompt ()
   "Insert a fresh, read-only prompt at the REPL."
