@@ -356,6 +356,22 @@ Invoking like so will start the server on a random port:
   (when (get-text-property (point) 'read-only)
     (forward-char 1)))
 
+(defun infmacs-repl-response (response)
+  "Handle RESPONSE for the REPL."
+  (setf buffer-read-only nil)
+  (let ((value (plist-get response :value))
+        (output (plist-get response :stdout))
+        (error (plist-get response :error)))
+    (if error
+        (insert (propertize (format "%S" error)
+                            'font-lock-face 'infmacs-repl-error))
+      (when output
+        (insert output))
+      (push value infmacs-repl-history)
+      (insert (propertize value 'font-lock-face 'infmacs-repl-value)))
+    (insert "\n")
+    (infmacs-repl-prompt)))
+
 (defun infmacs-repl-eval ()
   "Evaluate the current expression at the prompt."
   (interactive)
@@ -364,22 +380,7 @@ Invoking like so will start the server on a random port:
   (condition-case e
       (let ((sexp (infmacs-repl-find-sexp)))
         (setf buffer-read-only t)
-        (infmacs-eval
-         t sexp
-         (lambda (response)
-           (setf buffer-read-only nil)
-           (let ((value (plist-get response :value))
-                 (output (plist-get response :stdout))
-                 (error (plist-get response :error)))
-             (if error
-                 (insert (propertize (format "%S" error)
-                                     'font-lock-face 'infmacs-repl-error))
-               (when output
-                 (insert output))
-               (push value infmacs-repl-history)
-               (insert (propertize value 'font-lock-face 'infmacs-repl-value)))
-             (insert "\n")
-             (infmacs-repl-prompt)))))
+        (infmacs-eval t sexp #'infmacs-repl-response))
     (end-of-file nil)
     (error (insert
             (propertize "read error: " 'font-lock-face 'infmacs-repl-error))
