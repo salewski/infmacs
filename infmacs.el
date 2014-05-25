@@ -354,10 +354,10 @@ Invoking like so will start the server on a random port:
   "Evaluate the current expression at the prompt."
   (interactive)
   (setf (point) (point-max))
+  (insert "\n")
   (infmacs-eval
    t (infmacs-repl-find-sexp)
    (lambda (response)
-     (insert "\n")
      (let ((value (plist-get response :value))
            (output (plist-get response :stdout))
            (error (plist-get response :error)))
