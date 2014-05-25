@@ -380,6 +380,7 @@ Invoking like so will start the server on a random port:
                (insert (propertize value 'font-lock-face 'infmacs-repl-value)))
              (insert "\n")
              (infmacs-repl-prompt)))))
+    (end-of-file nil)
     (error (insert
             (propertize "read error: " 'font-lock-face 'infmacs-repl-error))
            (insert (format "%S\n" e))
