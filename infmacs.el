@@ -251,6 +251,12 @@ Invoking like so will start the server on a random port:
   (setf infmacs-default-connection (infmacs-connect host port))
   (message "Connected to %s:%d." host port))
 
+(defun infmacs-quit ()
+  "Close and quit the current infmacs connection."
+  (interactive)
+  (infmacs-close infmacs-default-connection)
+  (setf infmacs-default-connection nil))
+
 (defvar infmacs-minor-mode-map
   (let ((map (make-sparse-keymap)))
     (prog1 map
