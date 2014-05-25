@@ -361,21 +361,29 @@ Invoking like so will start the server on a random port:
   (interactive)
   (setf (point) (point-max))
   (insert "\n")
-  (infmacs-eval
-   t (infmacs-repl-find-sexp)
-   (lambda (response)
-     (let ((value (plist-get response :value))
-           (output (plist-get response :stdout))
-           (error (plist-get response :error)))
-       (if error
-           (insert (propertize (format "%S" error)
-                               'font-lock-face 'infmacs-repl-error))
-         (when output
-           (insert output))
-         (push value infmacs-repl-history)
-         (insert (propertize value 'font-lock-face 'infmacs-repl-value)))
-       (insert "\n")
-       (infmacs-repl-prompt)))))
+  (condition-case e
+      (let ((sexp (infmacs-repl-find-sexp)))
+        (setf buffer-read-only t)
+        (infmacs-eval
+         t sexp
+         (lambda (response)
+           (setf buffer-read-only nil)
+           (let ((value (plist-get response :value))
+                 (output (plist-get response :stdout))
+                 (error (plist-get response :error)))
+             (if error
+                 (insert (propertize (format "%S" error)
+                                     'font-lock-face 'infmacs-repl-error))
+               (when output
+                 (insert output))
+               (push value infmacs-repl-history)
+               (insert (propertize value 'font-lock-face 'infmacs-repl-value)))
+             (insert "\n")
+             (infmacs-repl-prompt)))))
+    (error (insert
+            (propertize "read error: " 'font-lock-face 'infmacs-repl-error))
+           (insert (format "%S\n" e))
+           (infmacs-repl-prompt))))
 
 (provide 'infmacs)
 
