@@ -377,14 +377,14 @@ Invoking like so will start the server on a random port:
   (interactive)
   (setf (point) (point-max))
   (insert "\n")
-  (condition-case e
+  (condition-case err
       (let ((sexp (infmacs-repl-find-sexp)))
         (setf buffer-read-only t)
         (infmacs-eval t sexp #'infmacs-repl-response))
-    (end-of-file nil)
+    (end-of-file (and err nil)) ;; `and' works around bug#15103
     (error (insert
             (propertize "read error: " 'font-lock-face 'infmacs-repl-error))
-           (insert (format "%S\n" e))
+           (insert (format "%S\n" err))
            (infmacs-repl-prompt))))
 
 (provide 'infmacs)
